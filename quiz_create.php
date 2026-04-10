@@ -611,18 +611,27 @@ document.getElementById('formQuiz')?.addEventListener('submit', function(e) {
 document.getElementById('btnPublish')?.addEventListener('click', async function() {
 
     const form = document.getElementById('formQuiz');
+
+    // 🔥 STOP autosave
+    saving = true;
+
+    // 🔥 forcer une dernière sauvegarde AVANT publication
+    await autoSaveAll();
+
     const formData = new FormData(form);
 
-    // 🔥 Vérifier quiz_id
     if (!formData.get('quiz_id')) {
-        alert("⏳ Attendez... sauvegarde en cours !");
+        alert("⏳ Sauvegarde en cours... réessayez");
+        saving = false;
         return;
     }
 
-    // 🔥 forcer statut
     formData.set('statut', 'en attente');
 
     try {
+
+        this.disabled = true;
+        this.innerHTML = "⏳ Publication...";
 
         const res = await fetch('/prof/quiz_store.php', {
             method: 'POST',
@@ -632,20 +641,59 @@ document.getElementById('btnPublish')?.addEventListener('click', async function(
         const data = await res.json();
 
         if (data.success) {
-            alert("✅ Quiz publié avec succès !");
-            window.location.href = "/prof/quiz_list.php";
+            window.location.href = "/prof/quiz_view.php?id=" + data.quiz_id;
         } else {
             alert("❌ Erreur publication");
+            saving = false;
         }
-
-        this.disabled = true;
-        this.innerHTML = "⏳ Publication...";
 
     } catch (e) {
         console.error(e);
         alert("❌ Erreur réseau");
+        saving = false;
     }
 });
+
+async function autoSaveAll() {
+
+    if (saving) return; // 🔥 empêche conflit
+    saving = true;
+
+    try {
+
+        const form = document.getElementById('formQuiz');
+        const formData = new FormData(form);
+
+        const r1 = await fetch('/prof/quiz_autosave.php', {
+            method: 'POST',
+            body: formData
+        });
+
+        const d1 = await r1.json();
+
+        if (d1.quiz_id) {
+            quizId.value = d1.quiz_id;
+            formData.set('quiz_id', d1.quiz_id);
+        }
+
+        await fetch('/prof/quiz_questions_autosave.php', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (document.getElementById('attachments').files.length > 0) {
+            await fetch('/prof/quiz_upload_autosave.php', {
+                method: 'POST',
+                body: formData
+            });
+        }
+
+    } catch (e) {
+        console.error("Autosave error:", e);
+    }
+
+    saving = false;
+}
 </script>
 
 <?php include __DIR__.'/layout/footer.php'; ?>
