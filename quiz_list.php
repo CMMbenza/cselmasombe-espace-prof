@@ -197,7 +197,7 @@ include __DIR__.'/layout/navbar.php';
                 </div>
 
                 <div class="col-md-2">
-                    <label class="form-label small">Du</label>
+                    <label class="form-label small">Sélectionner une date</label>
                     <input type="date" name="date_from" value="<?= e($dateFrom) ?>"
                         class="form-control form-control-sm">
                 </div>
