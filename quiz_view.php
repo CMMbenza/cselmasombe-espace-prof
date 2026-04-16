@@ -128,7 +128,7 @@ include __DIR__.'/layout/navbar.php';
         <?php endif; ?>
         <div class="card-body border-top d-flex flex-wrap gap-2 align-items-center">
 
-            <?php if ($quiz['statut'] === 'brouillon'): ?>
+            <?php if ($quiz['statut'] === 'brouillon' || $quiz['statut'] === 'Brouillon'): ?>
             <!-- Modifier -->
             <a href="/prof/quiz_update.php?id=<?= (int)$quiz['id'] ?>" class="btn btn-sm btn-primary">
                 <i class="bi bi-pencil"></i> Modifier
