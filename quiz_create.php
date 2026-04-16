@@ -229,8 +229,12 @@ autosaveStatus.className = "text-danger";
                         <div id="filePreview" class="mt-3"></div>
                     </div>
 
-                    <div class="col-12 text-end mt-3">
+                    <div class="col-12 mt-3">
 
+                        <small class="text-danger text-left mb-2">Pendant que vous remplissez le quiz, vos réponses sont
+                            automatiquement enregistrées en tant que brouillon. Lorsque vous cliquez sur le bouton, le
+                            quiz est soumis et envoyé au directeur pour validation.
+                        </small>
                         <input type="hidden" name="statut" id="statut" value="brouillon">
 
                         <button type="button" id="btnPublish" class="btn btn-success w-100">
@@ -599,7 +603,7 @@ async function autoSaveAll() {
 }
 
 // 🔥 timer global
-setInterval(autoSaveAll, 5000);
+setInterval(autoSaveAll, 1000);
 </script>
 
 <script>
