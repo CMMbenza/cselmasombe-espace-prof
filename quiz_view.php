@@ -128,12 +128,11 @@ include __DIR__.'/layout/navbar.php';
         <?php endif; ?>
         <div class="card-body border-top d-flex flex-wrap gap-2 align-items-center">
 
+            <?php if ($quiz['statut'] === 'brouillon'): ?>
             <!-- Modifier -->
             <a href="/prof/quiz_update.php?id=<?= (int)$quiz['id'] ?>" class="btn btn-sm btn-primary">
                 <i class="bi bi-pencil"></i> Modifier
             </a>
-
-            <?php if ($quiz['statut'] === 'brouillon'): ?>
             <form action="quiz_store.php" method="post">
                 <input type="hidden" name="quiz_id" value="<?= (int)$quiz['id'] ?>">
                 <input type="hidden" name="statut" value="en attente">
