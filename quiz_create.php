@@ -231,15 +231,21 @@ autosaveStatus.className = "text-danger";
 
                     <div class="col-12 mt-3">
 
-                        <small class="text-danger text-left mb-2">Pendant que vous remplissez le quiz, vos réponses sont
+                        <div class="alert alert-danger text-left mb-2">
+                            1. Pendant que vous remplissez le quiz, vos réponses sont
                             automatiquement enregistrées en tant que brouillon. Lorsque vous cliquez sur le bouton, le
-                            quiz est soumis et envoyé au directeur pour validation.
-                        </small>
+                            quiz est soumis et envoyé au directeur pour validation. <br>
+                            2. Les fichiers uploadés ne sont pas enregistrés comme brouillon.
+                        </div>
                         <input type="hidden" name="statut" id="statut" value="brouillon">
 
-                        <button type="button" id="btnPublish" class="btn btn-success w-100">
-                            <i class="bi bi-send"></i> Publier maintenant votre quiz
-                        </button>
+                        <div class="d-flex"><button type="button" id="btnPublish" class="btn btn-success me-2">
+                                <i class="bi bi-send"></i> Publier maintenant votre quiz
+                            </button>
+                            <button type="button" id="btnDraft" class="btn btn-danger">
+                                Enregistrer comme brouillon
+                            </button>
+                        </div>
 
                     </div>
 
@@ -556,8 +562,7 @@ attachmentInput?.addEventListener('change', function() {
         previewContainer.appendChild(wrapper);
     });
 });
-</script>
-<script>
+
 let quizId = document.getElementById('quiz_id');
 let saving = false;
 
@@ -565,48 +570,127 @@ function collectQuestions() {
     return window.qIndex !== undefined ? document.getElementById('formQuiz') : null;
 }
 
-async function autoSaveAll() {
-
-    if (saving) return;
-    saving = true;
+function validateForm() {
 
     const form = document.getElementById('formQuiz');
-    const formData = new FormData(form);
 
-    // 1️⃣ quiz
-    const r1 = await fetch('/prof/quiz_autosave.php', {
-        method: 'POST',
-        body: formData
-    });
-    const d1 = await r1.json();
-
-    if (d1.quiz_id) {
-        quizId.value = d1.quiz_id;
-        formData.set('quiz_id', d1.quiz_id);
+    // ✅ classes obligatoires (multiple)
+    const classes = document.getElementById('classe_ids');
+    if (!classes || classes.selectedOptions.length === 0) {
+        alert("❌ Sélectionnez au moins une classe");
+        return false;
     }
 
-    // 2️⃣ questions
-    await fetch('/prof/quiz_questions_autosave.php', {
-        method: 'POST',
-        body: formData
-    });
-
-    // 3️⃣ fichiers (si présents)
-    if (document.getElementById('attachments').files.length > 0) {
-        await fetch('/prof/quiz_upload_autosave.php', {
-            method: 'POST',
-            body: formData
-        });
+    // ✅ cours obligatoire
+    const cours = form.querySelector('[name="cours_id"]');
+    if (!cours || !cours.value) {
+        alert("❌ Sélectionnez un cours");
+        return false;
     }
 
-    saving = false;
+    // ✅ période
+    const periode = document.getElementById('periode_id');
+    if (!periode.value) {
+        alert("❌ Période invalide");
+        return false;
+    }
+
+    // ✅ type évaluation
+    const type = form.querySelector('[name="type_quiz"]');
+    if (!type.value) {
+        alert("❌ Type d’évaluation requis");
+        return false;
+    }
+
+    // ✅ format
+    const format = form.querySelector('[name="format"]');
+    if (!format.value) {
+        alert("❌ Format requis");
+        return false;
+    }
+
+    // ✅ description
+    const desc = form.querySelector('[name="description"]');
+    if (!desc.value.trim()) {
+        alert("❌ Description obligatoire");
+        return false;
+    }
+
+    // ✅ questions sauf PJ
+    if (format.value !== 'PJ') {
+
+        const questions = document.querySelectorAll('[name^="q["][name$="[text]"]');
+
+        if (questions.length === 0) {
+            alert("❌ Ajoutez au moins une question");
+            return false;
+        }
+
+        for (let q of questions) {
+            if (!q.value.trim()) {
+                alert("❌ Une question est vide");
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
-// 🔥 timer global
-setInterval(autoSaveAll, 1000);
-</script>
+document.getElementById('btnDraft')?.addEventListener('click', async function() {
 
-<script>
+    if (!validateForm()) return;
+
+    const form = document.getElementById('formQuiz');
+
+    // 🔥 dernière sauvegarde auto
+    saving = false;
+    await autoSaveAll();
+
+    const quizId = document.getElementById('quiz_id').value;
+
+    if (!quizId) {
+        alert("⏳ Sauvegarde en cours...");
+        return;
+    }
+
+    // ✅ redirection directe
+    window.location.href = "/prof/quiz_view.php?id=" + quizId;
+
+});
+
+// async function autoSaveAll() {
+
+//     if (saving) return;
+//     saving = true;
+
+//     const form = document.getElementById('formQuiz');
+//     const formData = new FormData(form);
+
+//     // 1️⃣ quiz
+//     const r1 = await fetch('/prof/quiz_autosave.php', {
+//         method: 'POST',
+//         body: formData
+//     });
+//     const d1 = await r1.json();
+
+//     if (d1.quiz_id) {
+//         quizId.value = d1.quiz_id;
+//         formData.set('quiz_id', d1.quiz_id);
+//     }
+
+//     // 2️⃣ questions
+//     await fetch('/prof/quiz_questions_autosave.php', {
+//         method: 'POST',
+//         body: formData
+//     });
+
+//     saving = false;
+// }
+
+// 🔥 timer global
+// setInterval(autoSaveAll, 3000);
+
 // 🚫 Désactiver soumission manuelle (sécurité)
 document.getElementById('formQuiz')?.addEventListener('submit', function(e) {
     e.preventDefault();
@@ -614,19 +698,20 @@ document.getElementById('formQuiz')?.addEventListener('submit', function(e) {
 
 document.getElementById('btnPublish')?.addEventListener('click', async function() {
 
+    if (!validateForm()) return;
+
     const form = document.getElementById('formQuiz');
 
-    // 🔥 STOP autosave
-    saving = true;
+    // 🔥 permettre autosave de fonctionner
+    saving = false;
 
-    // 🔥 forcer une dernière sauvegarde AVANT publication
+    // 🔥 dernière sauvegarde
     await autoSaveAll();
 
     const formData = new FormData(form);
 
     if (!formData.get('quiz_id')) {
         alert("⏳ Sauvegarde en cours... réessayez");
-        saving = false;
         return;
     }
 
@@ -637,6 +722,24 @@ document.getElementById('btnPublish')?.addEventListener('click', async function(
         this.disabled = true;
         this.innerHTML = "⏳ Publication...";
 
+        // ✅ 1. upload fichiers
+        if (document.getElementById('attachments').files.length > 0) {
+
+            const uploadRes = await fetch('/prof/quiz_upload_autosave.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            const uploadData = await uploadRes.json();
+
+            if (uploadData.status !== 'ok') {
+                alert("❌ Erreur upload fichiers");
+                this.disabled = false;
+                return;
+            }
+        }
+
+        // ✅ 2. publier quiz
         const res = await fetch('/prof/quiz_store.php', {
             method: 'POST',
             body: formData
@@ -648,13 +751,13 @@ document.getElementById('btnPublish')?.addEventListener('click', async function(
             window.location.href = "/prof/quiz_view.php?id=" + data.quiz_id;
         } else {
             alert("❌ Erreur publication");
-            saving = false;
+            this.disabled = false;
         }
 
     } catch (e) {
         console.error(e);
         alert("❌ Erreur réseau");
-        saving = false;
+        this.disabled = false;
     }
 });
 
@@ -685,12 +788,12 @@ async function autoSaveAll() {
             body: formData
         });
 
-        if (document.getElementById('attachments').files.length > 0) {
-            await fetch('/prof/quiz_upload_autosave.php', {
-                method: 'POST',
-                body: formData
-            });
-        }
+        // if (document.getElementById('attachments').files.length > 0) {
+        //     await fetch('/prof/quiz_upload_autosave.php', {
+        //         method: 'POST',
+        //         body: formData
+        //     });
+        // }
 
     } catch (e) {
         console.error("Autosave error:", e);
@@ -698,6 +801,7 @@ async function autoSaveAll() {
 
     saving = false;
 }
+setInterval(autoSaveAll, 3000);
 </script>
 
 <?php include __DIR__.'/layout/footer.php'; ?>
