@@ -99,9 +99,8 @@ if ($newStatus === 'en attente') {
         echo json_encode([
             'success' => true,
             'quiz_id' => $quizId,
-            'statut'  => 'en attente'
+            'redirect' => "/prof/quiz_view.php?id=" . $quizId
         ]);
-        header("Location: quiz_view.php?id=$quizId");
         exit;
 
     } catch (Throwable $e) {

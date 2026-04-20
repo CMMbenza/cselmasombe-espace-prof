@@ -231,11 +231,12 @@ autosaveStatus.className = "text-danger";
 
                     <div class="col-12 mt-3">
 
-                        <div class="alert alert-danger text-left mb-2">
+                        <div class="alert alert-primary br-none text-left mb-4">
                             1. Pendant que vous remplissez le quiz, vos réponses sont
                             automatiquement enregistrées en tant que brouillon. Lorsque vous cliquez sur le bouton, le
                             quiz est soumis et envoyé au directeur pour validation. <br>
-                            2. Les fichiers uploadés ne sont pas enregistrés comme brouillon.
+                            2. Les fichiers uploadés ne sont pas enregistrés comme brouillon. <br>
+                            3. N’oubliez pas de vous assurer que tous les champs nécessaires sont bien remplis.
                         </div>
                         <input type="hidden" name="statut" id="statut" value="brouillon">
 
@@ -745,10 +746,20 @@ document.getElementById('btnPublish')?.addEventListener('click', async function(
             body: formData
         });
 
-        const data = await res.json();
+        const text = await res.text();
+        console.log("SERVER:", text);
+
+        let data;
+
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            alert("❌ Erreur serveur (réponse invalide)");
+            return;
+        }
 
         if (data.success) {
-            window.location.href = "/prof/quiz_view.php?id=" + data.quiz_id;
+            window.location.href = data.redirect;
         } else {
             alert("❌ Erreur publication");
             this.disabled = false;

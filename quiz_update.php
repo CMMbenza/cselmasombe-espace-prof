@@ -235,23 +235,23 @@ include __DIR__.'/layout/navbar.php';
                         <select name="cours_id" id="cours_id" class="form-select" required>
 
                             <?php
-$loadedCours = [];
+                            $loadedCours = [];
 
-foreach ($quizClasses as $cid) {
-    foreach ($coursByClasse[$cid] ?? [] as $c) {
+                            foreach ($quizClasses as $cid) {
+                                foreach ($coursByClasse[$cid] ?? [] as $c) {
 
-        // éviter doublon
-        if (in_array($c['id'], $loadedCours)) continue;
-        $loadedCours[] = $c['id'];
-?>
+                                    // éviter doublon
+                                    if (in_array($c['id'], $loadedCours)) continue;
+                                    $loadedCours[] = $c['id'];
+                            ?>
                             <option value="<?= (int)$c['id'] ?>"
                                 <?= ((int)$quiz['cours_id'] === (int)$c['id']) ? 'selected' : '' ?>>
                                 <?= e($c['intitule']) ?>
                             </option>
                             <?php
-    }
-}
-?>
+                            }
+                        }
+                        ?>
 
                         </select>
                     </div>
@@ -264,8 +264,8 @@ foreach ($quizClasses as $cid) {
                         rows="4"><?= e((string)($quiz['description'] ?? '')) ?></textarea>
                 </div>
 
-                <div class="row">
-                    <div class="col-md-6 mb-3">
+                <div class="row mb-3">
+                    <div class="col-md-4">
                         <label class="form-label">Type</label>
                         <select name="type_quiz" class="form-select" required>
                             <?php
@@ -278,7 +278,7 @@ foreach ($quizClasses as $cid) {
                         </select>
                     </div>
 
-                    <div class="col-md-6 mb-3">
+                    <div class="col-md-4">
                         <label class="form-label">Format</label>
                         <select name="format" class="form-select" disabled required>
                             <?php
@@ -290,14 +290,14 @@ foreach ($quizClasses as $cid) {
                             <?php endforeach; ?>
                         </select>
                     </div>
-                </div>
 
-                <div class="mb-3">
-                    <label class="form-label">Date limite</label>
-                    <input type="date" name="date_limite" class="form-control"
-                        value="<?= e((string)($quiz['date_limite'] ?? '')) ?>">
-                </div>
+                    <div class="col-md-4">
+                        <label class="form-label text-danger">Date limite</label>
+                        <input type="date" name="date_limite" class="form-control"
+                            value="<?= e((string)($quiz['date_limite'] ?? '')) ?>">
+                    </div>
 
+                </div>
                 <hr class="my-4">
 
                 <h5 class="mb-3">Questions</h5>
@@ -464,7 +464,7 @@ const payload = {
     questions: []
 };
 
-document.getElementById('btnSaveAll')?.addEventListener('click', async function (e) {
+document.getElementById('btnSaveAll')?.addEventListener('click', async function(e) {
     e.preventDefault();
 
     const btn = this;
