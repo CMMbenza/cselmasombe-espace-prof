@@ -9,6 +9,21 @@ $prof    = current_prof();
 $agentId = (int)$prof['id'];
 $quizId  = (int)($_GET['id'] ?? 0);
 
+// 🔥 Classes du prof
+$stmt = $con->prepare("
+    SELECT c.id, CONCAT(c.description, ' ', cy.description) AS full_name
+    FROM classe c
+    INNER JOIN cycle cy ON cy.id = c.cycle
+    INNER JOIN affectation_prof_classe apc ON apc.classe_id = c.id
+    WHERE apc.agent_id = ?
+    GROUP BY c.id
+");
+$stmt->bind_param("i", $agentId);
+$stmt->execute();
+$classes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+$classesByLevel = $classes; // on ne groupe plus
+
 if ($quizId <= 0) {
     redirect('/prof/quiz_list.php');
 }
@@ -18,10 +33,22 @@ $success = '';
 
 try {
     // Charger quiz
-    $stmt = $con->prepare("SELECT * FROM quiz WHERE id=? LIMIT 1");
-    $stmt->bind_param('i', $quizId);
-    $stmt->execute();
-    $quiz = $stmt->get_result()->fetch_assoc();
+$stmt = $con->prepare("SELECT * FROM quiz WHERE id=? LIMIT 1");
+$stmt->bind_param('i', $quizId);
+$stmt->execute();
+$quiz = $stmt->get_result()->fetch_assoc();
+
+// 🔥 récupérer classes liées au quiz
+$stmtQC = $con->prepare("SELECT classe_id FROM quiz_classe WHERE quiz_id=?");
+$stmtQC->bind_param('i', $quizId);
+$stmtQC->execute();
+$resQC = $stmtQC->get_result();
+
+$quizClasses = [];
+
+while ($row = $resQC->fetch_assoc()) {
+    $quizClasses[] = (int)$row['classe_id'];
+}
 
     if (!$quiz || (int)$quiz['agent_id'] !== $agentId) {
         redirect('/prof/quiz_list.php');
@@ -52,19 +79,57 @@ try {
         }
     }
 
-    // Charger choix (pour QCM)
-    $choicesByQ = [];
-    if ($questions) {
-        $ids = array_column($questions, 'id');
+// Charger choix (pour QCM)
+$choicesByQ = [];
+
+if (!empty($questions)) {
+
+    $ids = array_column($questions, 'id');
+
+    if (!empty($ids)) {
+
         $in  = implode(',', array_fill(0, count($ids), '?'));
         $types = str_repeat('i', count($ids));
 
-        $stmtC = $con->prepare("SELECT id, question_id, choice_text, is_correct, sort_order FROM quiz_choice WHERE question_id IN ($in) ORDER BY question_id, sort_order, id");
+        $sql = "
+            SELECT 
+                id,
+                question_id,
+                choice_text,
+                is_correct,
+                sort_order
+            FROM quiz_choice
+            WHERE question_id IN ($in)
+            ORDER BY question_id, sort_order, id
+        ";
+
+        $stmtC = $con->prepare($sql);
         $stmtC->bind_param($types, ...$ids);
         $stmtC->execute();
+
         $resC = $stmtC->get_result();
+
         while ($c = $resC->fetch_assoc()) {
             $choicesByQ[(int)$c['question_id']][] = $c;
+        }
+    }
+// }
+
+        // 🔥 récupérer classes liées au quiz
+        $stmtC = $con->prepare("
+            SELECT classe_id 
+            FROM quiz_classe 
+            WHERE quiz_id=?
+        ");
+        $stmtC->bind_param('i', $quizId);
+        $stmtC->execute();
+
+        $resC = $stmtC->get_result();
+
+        $quizClasses = [];
+
+        while ($row = $resC->fetch_assoc()) {
+            $quizClasses[] = (int)$row['classe_id'];
         }
     }
 
@@ -74,8 +139,56 @@ try {
     $stmtA->execute();
     $attachments = $stmtA->get_result()->fetch_all(MYSQLI_ASSOC);
 
+    $coursByClasse = [];
+
+if ($classes) {
+    $classIds = array_map(fn($c) => (int)$c['id'], $classes);
+
+    if ($classIds) {
+        $in  = implode(',', array_fill(0, count($classIds), '?'));
+        $typ = str_repeat('i', count($classIds));
+
+        $sqlCours = "
+            SELECT co.id, co.intitule, co.classe_id
+            FROM cours co
+            INNER JOIN affectation_prof_classe apc
+                ON apc.cours_id = co.id
+                AND apc.agent_id = ?
+            WHERE co.classe_id IN ($in)
+            ORDER BY co.intitule
+        ";
+
+        $stmt = $con->prepare($sqlCours);
+
+        $bindTypes = 'i' . $typ;
+        $params = array_merge([$agentId], $classIds);
+
+        $stmt->bind_param($bindTypes, ...$params);
+        $stmt->execute();
+
+        $res = $stmt->get_result();
+
+        while ($row = $res->fetch_assoc()) {
+            $cid = (int)$row['classe_id'];
+            $coursByClasse[$cid][] = [
+                'id' => (int)$row['id'],
+                'intitule' => $row['intitule']
+            ];
+        }
+
+        $stmt->close();
+    }
+}
+
 } catch (Throwable $e) {
     $error = "Impossible de charger le quiz.";
+}
+$cycles = [];
+
+$res = $con->query("SELECT id, description FROM cycle ORDER BY description");
+
+while ($row = $res->fetch_assoc()) {
+    $cycles[] = $row;
 }
 
 include __DIR__.'/layout/header.php';
@@ -99,13 +212,50 @@ include __DIR__.'/layout/navbar.php';
 
             <form method="post">
 
-                <div class="mb-3">
-                    <label class="form-label">Titre (Cours) :</label>
-                    <input type="text" name="titre" class="form-control"
-                        value="<?= e((string)($quiz['titre'] ?? '')) ?>" required>
-                    <div class="form-text text-danger">
-                        Le titre est lié au cours et ne peut pas être modifié.
+                <div class="row">
+
+                    <!-- CLASSE -->
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Classe</label>
+                        <select name="classe_ids[]" id="classe_ids" class="form-select" multiple required>
+
+                            <?php foreach ($classes as $c): ?>
+                            <option value="<?= (int)$c['id'] ?>"
+                                <?= in_array((int)$c['id'], $quizClasses) ? 'selected' : '' ?>>
+                                <?= e($c['full_name']) ?>
+                            </option>
+                            <?php endforeach; ?>
+
+                        </select>
                     </div>
+
+                    <!-- COURS -->
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Cours</label>
+                        <select name="cours_id" id="cours_id" class="form-select" required>
+
+                            <?php
+$loadedCours = [];
+
+foreach ($quizClasses as $cid) {
+    foreach ($coursByClasse[$cid] ?? [] as $c) {
+
+        // éviter doublon
+        if (in_array($c['id'], $loadedCours)) continue;
+        $loadedCours[] = $c['id'];
+?>
+                            <option value="<?= (int)$c['id'] ?>"
+                                <?= ((int)$quiz['cours_id'] === (int)$c['id']) ? 'selected' : '' ?>>
+                                <?= e($c['intitule']) ?>
+                            </option>
+                            <?php
+    }
+}
+?>
+
+                        </select>
+                    </div>
+
                 </div>
 
                 <div class="mb-3">
@@ -218,6 +368,34 @@ include __DIR__.'/layout/navbar.php';
                     </button>
                 </div>
 
+                <div class="mb-3">
+                    <hr class="my-4">
+
+                    <h5>Pièces jointes</h5>
+
+                    <div id="attachments-container">
+
+                        <?php foreach ($attachments as $a): ?>
+                        <div class="d-flex align-items-center mb-2 attachment-item" data-id="<?= (int)$a['id'] ?>">
+
+                            <a href="<?= e($a['file_path']) ?>" target="_blank" class="me-3">
+                                📎 <?= e($a['original_name']) ?>
+                            </a>
+
+                            <button class="btn btn-sm btn-danger delete-attachment">
+                                Supprimer
+                            </button>
+
+                        </div>
+                        <?php endforeach; ?>
+
+                    </div>
+
+                    <div class="mt-3">
+                        <input type="file" id="newAttachments" multiple class="form-control">
+                    </div>
+                </div>
+
                 <div class="d-flex justify-content-between align-items-center mt-4">
                     <a href="/prof/quiz_view.php?id=<?= (int)$quizId ?>" class="btn btn-dark">
                         ← Annuler
@@ -238,51 +416,136 @@ include __DIR__.'/layout/navbar.php';
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log("JS READY");
+});
+
 const QUIZ_FORMAT = "<?= e($quiz['format'] ?? 'QCM') ?>";
-document.getElementById('btnSaveAll')?.addEventListener('click', async function() {
+const COURS_BY_CLASSE = <?= json_encode($coursByClasse) ?>;
+const CLASSES = <?= json_encode($classes) ?>;
+const quizId = <?= (int)$quizId ?>;
+
+document.getElementById('classe_ids').addEventListener('change', function() {
+
+    const selected = Array.from(this.selectedOptions).map(o => o.value);
+    const coursSelect = document.getElementById('cours_id');
+
+    coursSelect.innerHTML = '';
+
+    let added = new Set();
+
+    selected.forEach(classeId => {
+
+        if (!COURS_BY_CLASSE[classeId]) return;
+
+        COURS_BY_CLASSE[classeId].forEach(c => {
+
+            if (added.has(c.id)) return;
+            added.add(c.id);
+
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.intitule;
+
+            coursSelect.appendChild(opt);
+        });
+
+    });
+
+});
+
+const payload = {
+    quiz_id: quizId,
+    classe_ids: Array.from(document.getElementById('classe_ids').selectedOptions).map(o => o.value),
+    cours_id: document.getElementById('cours_id').value,
+    description: document.querySelector('[name="description"]').value,
+    type_quiz: document.querySelector('[name="type_quiz"]').value,
+    date_limite: document.querySelector('[name="date_limite"]').value,
+    questions: []
+};
+
+document.getElementById('btnSaveAll')?.addEventListener('click', async function (e) {
+    e.preventDefault();
 
     const btn = this;
     btn.disabled = true;
     btn.innerHTML = "⏳ Enregistrement...";
 
-    const quizId = <?= (int)$quizId ?>;
-
-    // 🔥 construire les données
-    const payload = {
-        quiz_id: quizId,
-        titre: document.querySelector('[name="titre"]').value,
-        description: document.querySelector('[name="description"]').value,
-        type_quiz: document.querySelector('[name="type_quiz"]').value,
-        date_limite: document.querySelector('[name="date_limite"]').value,
-        questions: []
-    };
-
-    document.querySelectorAll('.question-card').forEach(q => {
-
-        const qid = q.dataset.id;
-
-        const question = {
-            id: qid,
-            text: q.querySelector('.question-text').value,
-            points: q.querySelector('.question-points').value,
-            keywords: q.querySelector('.keywords-input')?.value || '',
-            choices: []
-        };
-
-        // QCM choix
-        q.querySelectorAll('.choice-item').forEach(c => {
-            question.choices.push({
-                id: c.dataset.id || null,
-                text: c.querySelector('.choice-text').value,
-                correct: c.querySelector('.choice-correct').checked ? 1 : 0
-            });
-        });
-
-        payload.questions.push(question);
-    });
-
     try {
 
+        const quizId = <?= (int)$quizId ?>;
+
+        // 🔥 Classes sélectionnées
+        const classe_ids = Array.from(
+            document.getElementById('classe_ids').selectedOptions
+        ).map(o => parseInt(o.value));
+
+        // 🔥 cours sélectionné
+        const cours_id = parseInt(document.getElementById('cours_id').value);
+
+        // 🔥 sécurité basique
+        if (classe_ids.length === 0) {
+            alert("Veuillez sélectionner au moins une classe");
+            throw new Error("No class selected");
+        }
+
+        if (!cours_id) {
+            alert("Veuillez sélectionner un cours");
+            throw new Error("No course selected");
+        }
+
+        // 🔥 payload propre
+        const payload = {
+            quiz_id: quizId,
+            classe_ids,
+            cours_id,
+            description: document.querySelector('[name="description"]').value,
+            type_quiz: document.querySelector('[name="type_quiz"]').value,
+            format: document.querySelector('[name="format"]').value,
+            date_limite: document.querySelector('[name="date_limite"]').value,
+            questions: []
+        };
+
+        // 🔥 questions
+        document.querySelectorAll('.question-card').forEach(q => {
+
+            const question = {
+                id: q.dataset.id || null,
+                text: q.querySelector('.question-text').value.trim(),
+                points: parseInt(q.querySelector('.question-points').value || 1),
+                keywords: q.querySelector('.keywords-input')?.value || '',
+                choices: []
+            };
+
+            q.querySelectorAll('.choice-item').forEach(c => {
+                question.choices.push({
+                    id: c.dataset.id ? parseInt(c.dataset.id) : null,
+                    text: c.querySelector('.choice-text').value.trim(),
+                    correct: c.querySelector('.choice-correct').checked ? 1 : 0
+                });
+            });
+
+            payload.questions.push(question);
+        });
+
+        // 🔥 upload fichiers
+        const files = document.getElementById('newAttachments').files;
+
+        if (files.length > 0) {
+            const fd = new FormData();
+            fd.append('quiz_id', quizId);
+
+            for (let f of files) {
+                fd.append('attachments[]', f);
+            }
+
+            await fetch('/prof/quiz_upload_autosave.php', {
+                method: 'POST',
+                body: fd
+            });
+        }
+
+        // 🔥 envoi final
         const res = await fetch('/prof/quiz_update_all.php', {
             method: 'POST',
             headers: {
@@ -291,110 +554,113 @@ document.getElementById('btnSaveAll')?.addEventListener('click', async function(
             body: JSON.stringify(payload)
         });
 
-        const text = await res.text();
-        console.log("RESPONSE RAW:", text);
-
-        const data = JSON.parse(text);
+        const data = await res.json();
 
         if (data.success) {
             window.location.href = "/prof/quiz_view.php?id=" + quizId;
         } else {
-            alert("X Erreur lors de l'enregistrement");
-            btn.disabled = false;
-            btn.innerHTML = "💾 Enregistrer toutes les modifications";
+            alert("Erreur lors de l'enregistrement");
         }
 
     } catch (e) {
         console.error(e);
-        alert("X Erreur réseau");
+        alert("Erreur lors de la sauvegarde");
+    } finally {
         btn.disabled = false;
         btn.innerHTML = "💾 Enregistrer toutes les modifications";
     }
-
 });
 
 document.addEventListener('click', function(e) {
 
-    // ➕ Ajouter choix
-    if (e.target.classList.contains('add-choice')) {
+    const btn = e.target.closest('.add-choice');
+    if (!btn) return;
 
-        e.preventDefault();
+    e.preventDefault();
 
-        const container = e.target.closest('.question-card')
-            .querySelector('.choices-container');
+    const card = btn.closest('.question-card');
+    if (!card) return;
 
-        const div = document.createElement('div');
-        div.className = "input-group mb-2 choice-item";
+    const container = card.querySelector('.choices-container');
+    if (!container) return;
 
-        div.innerHTML = `
-            <input type="text" class="form-control choice-text" placeholder="Nouvelle assertion">
-            <span class="input-group-text">
-                <input type="checkbox" class="choice-correct">
-            </span>
-            <button class="btn btn-danger btn-sm remove-choice">X</button>
-        `;
+    const div = document.createElement('div');
+    div.className = "input-group mb-2 choice-item";
 
-        container.appendChild(div);
-    }
+    div.innerHTML = `
+        <input type="text" class="form-control choice-text" placeholder="Nouvelle assertion">
+        <span class="input-group-text">
+            <input type="checkbox" class="choice-correct">
+        </span>
+        <button type="button" class="btn btn-danger btn-sm remove-choice">X</button>
+    `;
 
-    // X Supprimer choix
-    if (e.target.classList.contains('remove-choice')) {
-        e.preventDefault();
-        e.target.closest('.choice-item').remove();
-    }
-
+    container.appendChild(div);
 });
 
-document.getElementById('btnAddQuestion')?.addEventListener('click', function() {
+document.addEventListener('click', function(e) {
 
-    const container = document.getElementById('questions-container');
+    const btn = e.target.closest('.remove-choice');
+    if (!btn) return;
 
-    const isRQ = QUIZ_FORMAT === 'RQ';
+    e.preventDefault();
+    btn.closest('.choice-item')?.remove();
+});
 
-    const newCard = document.createElement('div');
-    newCard.className = "card mb-3 question-card";
-    newCard.dataset.id = "";
+document.addEventListener('click', function(e) {
 
-    newCard.innerHTML = `
-        <div class="card-body">
+    const btn = e.target.closest('.delete-question');
+    if (!btn) return;
 
-            <div class="d-flex justify-content-between">
-                <strong>Nouvelle question (${QUIZ_FORMAT})</strong>
-                <button type="button" class="btn btn-sm btn-danger delete-question">Supprimer</button>
-            </div>
+    e.preventDefault();
+    btn.closest('.question-card')?.remove();
+});
 
-            <textarea class="form-control mt-2 question-text" placeholder="Votre question..."></textarea>
+document.addEventListener('click', function(e) {
 
-            <div class="row mt-2">
-                <div class="col-md-4">
-                    <input type="number" class="form-control question-points" value="1">
+    // ➕ AJOUT QUESTION
+    if (e.target.closest('#btnAddQuestion')) {
+
+        e.preventDefault();
+
+        const container = document.getElementById('questions-container');
+        if (!container) return;
+
+        const card = document.createElement('div');
+        card.className = "card mb-3 question-card";
+
+        card.innerHTML = `
+            <div class="card-body">
+
+                <div class="d-flex justify-content-between">
+                    <strong>Nouvelle question</strong>
+                    <button type="button" class="btn btn-sm btn-danger delete-question">Supprimer</button>
                 </div>
 
-                <div class="col-md-4">
-                    <input type="text" class="form-control" value="${QUIZ_FORMAT}" disabled>
-                </div>
-            </div>
+                <textarea class="form-control mt-2 question-text"></textarea>
 
-            ${isRQ ? `
-                <div class="mt-3">
-                    <label>Mots clés IA</label>
-                    <input type="text" class="form-control keywords-input">
+                <div class="row mt-2">
+                    <div class="col-md-4">
+                        <input type="number" class="form-control question-points" value="1">
+                    </div>
                 </div>
-            ` : `
+
                 <div class="mt-3 choices-container">
                     <h6>Choix QCM</h6>
                 </div>
 
-                <button class="btn btn-sm btn-success mt-2 add-choice">
-                    ➕ Ajouter un choix
+                <button type="button" class="btn btn-sm btn-success mt-2 add-choice">
+                    ➕ Ajouter une assertion
                 </button>
-            `}
 
-        </div>
-    `;
+            </div>
+        `;
 
-    container.appendChild(newCard);
+        container.appendChild(card);
+        return;
+    }
 });
+
 document.addEventListener('click', function(e) {
 
     if (e.target.classList.contains('delete-question')) {
@@ -402,6 +668,47 @@ document.addEventListener('click', function(e) {
         e.target.closest('.question-card').remove();
     }
 
+});
+
+document.addEventListener('click', async function(e) {
+
+    if (e.target.classList.contains('delete-attachment')) {
+
+        e.preventDefault();
+
+        const row = e.target.closest('.attachment-item');
+        const id = row.dataset.id;
+
+        if (!confirm("Supprimer ce fichier ?")) return;
+
+        try {
+
+            const res = await fetch('/prof/quiz_delete_attachment.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    id
+                })
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                row.remove();
+            } else {
+                alert("Erreur suppression");
+            }
+
+        } catch (e) {
+            alert("Erreur réseau");
+        }
+    }
+
+});
+window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('classe_ids').dispatchEvent(new Event('change'));
 });
 </script>
 
