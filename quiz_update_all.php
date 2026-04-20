@@ -51,6 +51,33 @@ try {
     $con->begin_transaction();
 
     /* ==========================
+    UPDATE CLASSES
+    ========================== */
+
+    $con->query("DELETE FROM quiz_classe WHERE quiz_id = $quizId");
+
+    if (!empty($data['classe_ids'])) {
+
+        $stmtC = $con->prepare("
+            INSERT INTO quiz_classe (quiz_id, classe_id)
+            VALUES (?, ?)
+        ");
+
+        foreach ($data['classe_ids'] as $cid) {
+
+            $cid = (int)$cid;
+
+            $stmtC->bind_param('ii', $quizId, $cid);
+
+            if (!$stmtC->execute()) {
+                throw new Exception("Erreur insertion classe");
+            }
+        }
+
+        $stmtC->close();
+    }
+
+    /* ==========================
        UPDATE QUIZ
     ========================== */
     $stmt = $con->prepare("
