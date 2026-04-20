@@ -101,6 +101,7 @@ if ($newStatus === 'en attente') {
             'quiz_id' => $quizId,
             'statut'  => 'en attente'
         ]);
+        header("Location: quiz_view.php?id=$quizId");
         exit;
 
     } catch (Throwable $e) {

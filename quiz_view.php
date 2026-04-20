@@ -21,18 +21,25 @@ if ($quizId <= 0) {
 
 // Charger entête quiz + classes/cycles
 $sql = "SELECT 
-          q.id, q.agent_id, q.type_quiz, q.format, q.titre, q.description, q.statut, q.date_limite, q.created_at,
-          c.id AS classe_id, c.description AS classe_desc, cy.id AS cycle_id, cy.description AS cycle_desc
+          q.id, q.agent_id, q.type_quiz, q.format, q.titre, q.description, q.statut, q.date_limite, q.created_at
         FROM quiz q
-        JOIN quiz_classe qc ON qc.quiz_id = q.id
-        JOIN classe c ON c.id = qc.classe_id
-        JOIN cycle cy ON cy.id = c.cycle
-        WHERE q.id = ?
-        LIMIT 1";
+        WHERE q.id = ?";
 $stmt = $con->prepare($sql);
 $stmt->bind_param('i', $quizId);
 $stmt->execute();
 $quiz = $stmt->get_result()->fetch_assoc();
+
+$stmtC = $con->prepare("
+    SELECT c.id, c.description AS classe_desc, cy.description AS cycle_desc
+    FROM quiz_classe qc
+    INNER JOIN classe c ON c.id = qc.classe_id
+    INNER JOIN cycle cy ON cy.id = c.cycle
+    WHERE qc.quiz_id = ?
+");
+$stmtC->bind_param('i', $quizId);
+$stmtC->execute();
+
+$classes = $stmtC->get_result()->fetch_all(MYSQLI_ASSOC);
 
 if (!$quiz || (int)$quiz['agent_id'] !== $agentId) {
   redirect('/prof/quiz_list.php');
@@ -102,8 +109,15 @@ include __DIR__.'/layout/navbar.php';
             <div>
                 <h2 class="h5 mb-1"><?= e($quiz['titre']) ?></h2>
                 <div class="small text-muted">
-                    Classe: <strong><?= e($quiz['classe_desc']) ?></strong> — Cycle:
-                    <strong><?= e($quiz['cycle_desc']) ?></strong><br>
+                    Classe(s):
+                    <strong>
+                        <?php
+                        echo implode(', ', array_map(
+                            fn($c) => $c['classe_desc'].' ('.$c['cycle_desc'].')',
+                            $classes
+                        ));
+                        ?>
+                    </strong><br>
                     Type: <?= e($quiz['type_quiz']) ?> • Format: <?= e($quiz['format']) ?> • Créé:
                     <?= e($quiz['created_at']) ?>
                     <?php if (!empty($quiz['date_limite'])): ?> • Date limite:
