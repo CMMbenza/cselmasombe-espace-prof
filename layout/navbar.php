@@ -115,6 +115,7 @@ $stmt->close();
             <li><a class="dropdown-item <?= is_active(['/prof/doc_peda/vusialisation_de_mes_cours.php'], $uriPath) ?>" href="/prof/doc_peda/vusialisation_de_mes_cours.php">Statistique de mes cours</a></li>
             <li><a class="dropdown-item <?= is_active(['/prof/doc_peda/fiches_des_eleves.php'], $uriPath) ?>" href="/prof/doc_peda/fiches_des_eleves.php">Fiche des élèves</a></li>
             <li><a class="dropdown-item <?= is_active(['/prof/doc_peda/cahier_des_cotes.php'], $uriPath) ?>" href="/prof/doc_peda/cahier_des_cotes.php">Cahier des côtes</a></li>
+            <li><a class="dropdown-item <?= is_active(['/prof/doc_peda/palmares_trimestre.php'], $uriPath) ?>" href="/prof/doc_peda/palmares_trimestre.php">Palmares</a></li>
           </ul>
         </li>
       </ul>

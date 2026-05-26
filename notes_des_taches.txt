@@ -1,0 +1,46 @@
+<?php if ((int)$r['autorise'] === 1): ?>
+
+                            <span class="badge bg-success">
+                                ✔
+                            </span>
+
+                            <?php else: ?>
+
+                            <span class="badge bg-danger">
+                                ✖
+                            </span>
+
+                            <?php endif; ?>
+                            
+06.05 : 
+
+CREATE TABLE palmares_trimestre (
+
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    eleve_id INT NOT NULL,
+    classe_id INT NOT NULL,
+
+    trimestre VARCHAR(10) NOT NULL,
+
+    lang DECIMAL(10,2) DEFAULT 0,
+    math DECIMAL(10,2) DEFAULT 0,
+    cult DECIMAL(10,2) DEFAULT 0,
+
+    max_lang DECIMAL(10,2) DEFAULT 0,
+    max_math DECIMAL(10,2) DEFAULT 0,
+    max_cult DECIMAL(10,2) DEFAULT 0,
+
+    max_total DECIMAL(10,2) DEFAULT 0,
+    max_percent DECIMAL(10,2) DEFAULT 100,
+
+    total DECIMAL(10,2) DEFAULT 0,
+    percent DECIMAL(10,2) DEFAULT 0,
+
+    obs VARCHAR(255) DEFAULT NULL,
+
+    autorise TINYINT(1) DEFAULT 1,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+);
