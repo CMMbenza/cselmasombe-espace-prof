@@ -30,7 +30,7 @@ $stmt->execute();
 $eleves = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
-$trimestres = ['T1', 'T2', 'T3'];
+$trimestres = ['1P', '2P', 'Examen 1 trimestre','3P', '4P', 'Examen 2 trimestre', 'P5', 'P6', 'Examen 3trimestre'];
 
 $msg = '';
 $err = '';
@@ -343,7 +343,7 @@ function e($s){ return htmlspecialchars((string)$s,ENT_QUOTES,'UTF-8'); }
 
 <div class="container mt-3">
 
-    <h5>Palmarès trimestre</h5>
+    <h5>Palmarès cycle primaire</h5>
 
     <?php if ($msg): ?><div class="alert alert-success"><?= e($msg) ?></div><?php endif; ?>
     <?php if ($err): ?><div class="alert alert-danger"><?= e($err) ?></div><?php endif; ?>
@@ -378,7 +378,7 @@ function e($s){ return htmlspecialchars((string)$s,ENT_QUOTES,'UTF-8'); }
                         <select name="eleve_id" class="form-select" required>
 
                             <option value="">
-                                --
+                                Sélectionner l'élève
                             </option>
 
                             <?php foreach ($eleves as $el):
@@ -409,11 +409,11 @@ function e($s){ return htmlspecialchars((string)$s,ENT_QUOTES,'UTF-8'); }
                     <div class="col-md-6">
 
                         <label class="form-label">
-                            Trimestre
+                            Session scolaire (Période/Examen)
                         </label>
 
                         <select name="trimestre" class="form-select" required>
-
+                            <option selected disabled>Sélectionner la session scolaire (Période/Examen)</option>
                             <?php foreach ($trimestres as $t): ?>
 
                             <option value="<?= e($t) ?>"
@@ -640,7 +640,7 @@ function e($s){ return htmlspecialchars((string)$s,ENT_QUOTES,'UTF-8'); }
                 <!-- TRIMESTRE -->
                 <div class="col-md-3">
                     <label class="form-label">
-                        Trimestre
+                        Session scolaire
                     </label>
 
                     <select name="filter_trim" class="form-select">
@@ -709,7 +709,7 @@ function e($s){ return htmlspecialchars((string)$s,ENT_QUOTES,'UTF-8'); }
 
                         <th>#</th>
                         <th>Élève</th>
-                        <th>Trim.</th>
+                        <th>Session sc.</th>
 
                         <th>LANG</th>
                         <th>MATH</th>
